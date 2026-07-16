@@ -1,5 +1,5 @@
 import type { Hooks } from "@opencode-ai/plugin"
-import { resolveRewrite, resolveRuntime, type Exec } from "./rewrite"
+import { resolveRewrite, resolveRuntime, type Exec } from "./rewrite.js"
 
 export type Notice = (message: string, variant: "info" | "warning") => Promise<void>
 
@@ -28,7 +28,7 @@ export function createHooks(exec: Exec, notify: Notice = async () => {}): Hooks 
   const warn = async (message: string) => {
     if (warned.has(message)) return
     warned.add(message)
-    console.warn(`[openrtk] ${message}`)
+    console.warn(`[opencode-rtk-optimizer] ${message}`)
     await notify(message, "warning")
   }
 

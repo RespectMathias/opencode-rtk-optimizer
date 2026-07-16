@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test"
-import { createHooks } from "./hooks"
-import { resolveRewrite, resolveRuntime, type Exec } from "./rewrite"
+import assert from "node:assert/strict"
+import { describe, test } from "node:test"
+import { createHooks } from "./hooks.js"
+import { resolveRewrite, resolveRuntime, type Exec } from "./rewrite.js"
 
 function result(stdout = "", stderr = "", exitCode = 0) {
   return { stdout, stderr, exitCode }
@@ -15,8 +16,8 @@ describe("resolveRuntime", () => {
       return result("rtk 1.0.0")
     }
 
-    expect(await resolveRuntime(exec, "win32")).toEqual({ command: "C:\\Program Files\\rtk.exe" })
-    expect(calls).toEqual([
+    assert.deepEqual(await resolveRuntime(exec, "win32"), { command: "C:\\Program Files\\rtk.exe" })
+    assert.deepEqual(calls, [
       ["where.exe", ["rtk"]],
       ["C:\\Program Files\\rtk.exe", ["--version"]],
     ])
@@ -24,7 +25,7 @@ describe("resolveRuntime", () => {
 
   test("reports unavailable rtk", async () => {
     const exec: Exec = async () => result("", "not found", 1)
-    expect(await resolveRuntime(exec, "linux")).toEqual({ warning: "rtk unavailable: not found" })
+    assert.deepEqual(await resolveRuntime(exec, "linux"), { warning: "rtk unavailable: not found" })
   })
 })
 
@@ -37,30 +38,30 @@ describe("resolveRewrite", () => {
     }
 
     const command = "git diff --stat; if ($?) { git diff }"
-    expect(await resolveRewrite(exec, command, "C:\\rtk.exe")).toEqual({
+    assert.deepEqual(await resolveRewrite(exec, command, "C:\\rtk.exe"), {
       changed: true,
       original: command,
       rewritten: "rtk git diff --stat; if ($?) { git diff }",
       exitCode: 0,
     })
-    expect(calls).toEqual([["C:\\rtk.exe", ["rewrite", command]]])
+    assert.deepEqual(calls, [["C:\\rtk.exe", ["rewrite", command]]])
   })
 
   test("accepts rtk rewrite exit code 3", async () => {
     const exec: Exec = async () => result("rtk git status", "", 3)
-    expect((await resolveRewrite(exec, "git status", "rtk")).changed).toBe(true)
+    assert.equal((await resolveRewrite(exec, "git status", "rtk")).changed, true)
   })
 
   test("leaves no-match and denied commands unchanged", async () => {
     const noMatch: Exec = async () => result("", "", 1)
     const denied: Exec = async () => result("", "unsafe rewrite", 2)
-    expect(await resolveRewrite(noMatch, "echo ok", "rtk")).toEqual({
+    assert.deepEqual(await resolveRewrite(noMatch, "echo ok", "rtk"), {
       changed: false,
       original: "echo ok",
       rewritten: "echo ok",
       exitCode: 1,
     })
-    expect(await resolveRewrite(denied, "git push", "rtk")).toEqual({
+    assert.deepEqual(await resolveRewrite(denied, "git push", "rtk"), {
       changed: false,
       original: "git push",
       rewritten: "git push",
@@ -75,8 +76,8 @@ describe("resolveRewrite", () => {
       invoked = true
       return result()
     }
-    expect((await resolveRewrite(exec, "rtk git diff", "rtk")).changed).toBe(false)
-    expect(invoked).toBe(false)
+    assert.equal((await resolveRewrite(exec, "rtk git diff", "rtk")).changed, false)
+    assert.equal(invoked, false)
   })
 
   test("fails open on timeout and empty rewrite output", async () => {
@@ -84,14 +85,14 @@ describe("resolveRewrite", () => {
       throw new Error("command timed out after 3000 ms")
     }
     const empty: Exec = async () => result("", "", 3)
-    expect(await resolveRewrite(timeout, "git diff", "rtk")).toEqual({
+    assert.deepEqual(await resolveRewrite(timeout, "git diff", "rtk"), {
       changed: false,
       original: "git diff",
       rewritten: "git diff",
       exitCode: -1,
       warning: "rtk rewrite failed: command timed out after 3000 ms",
     })
-    expect(await resolveRewrite(empty, "git diff", "rtk")).toEqual({
+    assert.deepEqual(await resolveRewrite(empty, "git diff", "rtk"), {
       changed: false,
       original: "git diff",
       rewritten: "git diff",
@@ -122,20 +123,20 @@ describe("plugin lifecycle", () => {
       { tool: "bash", sessionID: "session", callID: "call" },
       { args },
     )
-    expect(args.command).toBe("rtk git diff")
+    assert.equal(args.command, "rtk git diff")
 
     const output = { title: "Get changes", output: "compressed diff", metadata: { exit: 0 } }
     await hooks["tool.execute.after"]?.(
       { tool: "bash", sessionID: "session", callID: "call", args },
       output,
     )
-    expect(args.command).toBe("git diff")
-    expect(output.output).toBe("compressed diff")
-    expect(output.metadata).toEqual({
+    assert.equal(args.command, "git diff")
+    assert.equal(output.output, "compressed diff")
+    assert.deepEqual(output.metadata, {
       exit: 0,
       openrtk: { original: "git diff", rewritten: "rtk git diff" },
     })
-    expect(notices).toContain("git diff -> rtk git diff")
+    assert.ok(notices.includes("git diff -> rtk git diff"))
   })
 
   test("restores persisted rewritten commands before model conversion", async () => {
@@ -162,7 +163,7 @@ describe("plugin lifecycle", () => {
     await hooks["experimental.chat.messages.transform"]?.({}, {
       messages: [{ info: {} as never, parts: [part] }],
     })
-    expect(part.state.input.command).toBe("git diff")
+    assert.equal(part.state.input.command, "git diff")
   })
 
   test("uses persisted provenance after successful call state is released", async () => {
@@ -197,7 +198,7 @@ describe("plugin lifecycle", () => {
     await hooks["experimental.chat.messages.transform"]?.({}, {
       messages: [{ info: {} as never, parts: [part] }],
     })
-    expect(part.state.input.command).toBe("git diff")
+    assert.equal(part.state.input.command, "git diff")
   })
 
   test("marks silent success and exposes command failures", async () => {
@@ -212,7 +213,7 @@ describe("plugin lifecycle", () => {
       { tool: "bash", sessionID: "session", callID: "success", args: successArgs },
       successOutput,
     )
-    expect(successOutput.output).toBe("(no output)")
+    assert.equal(successOutput.output, "(no output)")
 
     const failure = setup()
     const failureArgs = { command: "git diff" }
@@ -225,7 +226,7 @@ describe("plugin lifecycle", () => {
       { tool: "bash", sessionID: "session", callID: "failure", args: failureArgs },
       failureOutput,
     )
-    expect(failureOutput.output).toBe("fatal\n\nCommand exited with code 7")
+    assert.equal(failureOutput.output, "fatal\n\nCommand exited with code 7")
   })
 
   test("keeps parallel calls isolated", async () => {
@@ -249,7 +250,7 @@ describe("plugin lifecycle", () => {
       { tool: "bash", sessionID: "s", callID: "1", args: first },
       { title: "", output: "ok", metadata: { exit: 0 } },
     )
-    expect(first.command).toBe("git diff")
-    expect(second.command).toBe("git status")
+    assert.equal(first.command, "git diff")
+    assert.equal(second.command, "git status")
   })
 })

@@ -1,4 +1,7 @@
-# openrtk
+# opencode-rtk-optimizer
+
+> [!NOTE]
+> This fork exists because [openrtk](https://github.com/martinstannard/openrtk) appears inactive, with no updates for roughly four months. The npm package will be removed if changes are accepted upstream.
 
 OpenCode plugin for [RTK](https://github.com/rtk-ai/rtk) (Rust Token Killer). Reduces LLM token consumption by 60-90% on common dev commands by transparently routing them through RTK's output compression.
 
@@ -17,14 +20,14 @@ cargo install rtk
 Install via npm:
 
 ```bash
-npm install openrtk
+npm install opencode-rtk-optimizer
 ```
 
 Then add to your OpenCode config (`opencode.json` or `.opencode/config.json`):
 
 ```json
 {
-  "plugin": ["openrtk"]
+  "plugin": ["opencode-rtk-optimizer"]
 }
 ```
 
@@ -56,10 +59,6 @@ Supported commands are determined by the installed RTK version. Common rewrites 
 | Python | pytest, ruff, pip, uv pip |
 | Go | go test/build/vet, golangci-lint |
 | Packages | pnpm list/ls/outdated |
-
-### System prompt
-
-Copy `opencode.md` into your project or user config to teach the model about `rtk gain` and other meta commands.
 
 ## Development
 
