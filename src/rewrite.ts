@@ -62,7 +62,11 @@ export async function resolveRuntime(exec: Exec, platform = process.platform): P
 
   try {
     const result = await exec(command, ["--version"], 1_000)
-    if (result.exitCode === 0) return { command, warning }
+    if (result.exitCode === 0) {
+      const runtime: Runtime = { command }
+      if (warning) runtime.warning = warning
+      return runtime
+    }
     return { warning: `rtk unavailable: ${(result.stderr || result.stdout || `exit ${result.exitCode}`).trim()}` }
   } catch (error) {
     return { warning: `rtk unavailable: ${error instanceof Error ? error.message : String(error)}` }
