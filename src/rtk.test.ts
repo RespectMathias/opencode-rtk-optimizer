@@ -45,7 +45,8 @@ test("native RTK compatibility", async (t) => {
     assert.equal((await resolveRewrite(exec, "git status", runtime.command!, options)).exitCode, 3)
     await writeFile(settings, JSON.stringify({ permissions: { deny: ["Bash(git *)"] } }))
     const invocation = { command: "git status", cwd, env, shell: "sh", timeout: 1_000 }
-    await assert.rejects(createShellHook(exec)(invocation), /rtk denied rewrite/)
+    assert.equal((await resolveRewrite(exec, "git status", runtime.command!, options)).exitCode, 2)
+    await createShellHook(exec)(invocation)
     assert.equal(invocation.command, "git status")
     await writeFile(settings, "{}")
     assert.equal((await resolveRewrite(exec, "echo hello", runtime.command!, options)).exitCode, 1)

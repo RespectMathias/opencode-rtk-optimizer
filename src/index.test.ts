@@ -53,7 +53,7 @@ describe("V2 shell hook", () => {
     assert.equal(input.command, "git status")
   })
 
-  test("blocks an explicit RTK deny before spawning", async () => {
+  test("defers Claude deny rules to native OpenCode permissions", async () => {
     const exec: Exec = async (_command, args) => {
       if (args[0] === "rtk" || args[0] === "$PATH:rtk") return result("rtk\n")
       if (args[0] === "--version") return result("rtk 0.51.0")
@@ -61,7 +61,7 @@ describe("V2 shell hook", () => {
     }
     const hook = createShellHook(exec)
     const invocation = event("git push")
-    await assert.rejects(hook(invocation), /rtk denied rewrite/)
+    await hook(invocation)
     assert.equal(invocation.command, "git push")
   })
 
@@ -314,7 +314,7 @@ describe("resolveRewrite", () => {
 })
 
 describe("plugin lifecycle", () => {
-  test("blocks commands explicitly denied by rtk", async () => {
+  test("defers Claude deny rules to V1 OpenCode permissions", async () => {
     const exec: Exec = async (_command, args) => {
       if (args[0] === "rtk" || args[0] === "$PATH:rtk") return result("rtk\n")
       if (args[0] === "--version") return result("rtk 0.51.0")
@@ -322,10 +322,7 @@ describe("plugin lifecycle", () => {
     }
     const hooks = createHooks(exec)
     const args = { command: "git push" }
-    await assert.rejects(
-      hooks["tool.execute.before"]!({ tool: "bash", sessionID: "s", callID: "deny" }, { args }),
-      /rtk denied rewrite/,
-    )
+    await hooks["tool.execute.before"]!({ tool: "bash", sessionID: "s", callID: "deny" }, { args })
     assert.equal(args.command, "git push")
   })
 

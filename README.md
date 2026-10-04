@@ -43,7 +43,7 @@ For local development, clone the repository and run `npm ci` and `npm run build`
 
 The plugin delegates rewrites to `rtk rewrite` while preserving the original model-facing command. V2 permission rules must cover the rewritten command, such as `rtk git status *`. The plugin never grants permissions.
 
-Missing RTK, unsupported commands, and rewrite failures leave commands unchanged. Explicit RTK deny decisions block execution. Each command is passed as one argument to RTK and executed by OpenCode's selected shell.
+Missing RTK, unsupported commands, rewrite failures, and RTK deny decisions leave commands unchanged for OpenCode's permission checks. Each command is passed as one argument to RTK and executed by OpenCode's selected shell.
 
 ```
 git status       ->  rtk git status       (72% savings)

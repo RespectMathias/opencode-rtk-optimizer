@@ -50,7 +50,7 @@ function createRewriter(exec: Exec, notify: Notice = async () => {}) {
     }
     if (!rtk) return
     const result = await resolveRewrite(exec, command, rtk, options)
-    if (result.exitCode === 2) throw new Error(result.warning ?? "rtk denied rewrite")
+    if (result.exitCode === 2) return result
     if (result.warning) await warn(result.warning)
     return result
   }
