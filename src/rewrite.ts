@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process"
+import { win32 } from "node:path"
 
 export type ExecResult = {
   stdout: string
@@ -6,7 +7,9 @@ export type ExecResult = {
   exitCode: number
 }
 
-export type Exec = (command: string, args: string[], timeout: number) => Promise<ExecResult>
+export type ExecOptions = { cwd?: string; env?: NodeJS.ProcessEnv }
+
+export type Exec = (command: string, args: string[], timeout: number, options?: ExecOptions) => Promise<ExecResult>
 
 export type Runtime = {
   command?: string
@@ -31,8 +34,8 @@ function firstLine(value: string) {
 }
 
 export function createExec(): Exec {
-  return (command, args, timeout) => new Promise((resolve, reject) => {
-    execFile(command, args, { timeout, windowsHide: true, encoding: "utf8" }, (error, stdout, stderr) => {
+  return (command, args, timeout, options) => new Promise((resolve, reject) => {
+    execFile(command, args, { ...options, timeout, windowsHide: true, encoding: "utf8" }, (error, stdout, stderr) => {
       if (!error) {
         resolve({ stdout, stderr, exitCode: 0 })
         return
@@ -46,13 +49,15 @@ export function createExec(): Exec {
   })
 }
 
-export async function resolveRuntime(exec: Exec, platform = process.platform): Promise<Runtime> {
-  const resolver = platform === "win32" ? "where.exe" : "which"
+export async function resolveRuntime(exec: Exec, platform = process.platform, options?: ExecOptions): Promise<Runtime> {
+  const resolver = platform === "win32"
+    ? win32.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "where.exe")
+    : "which"
   let command = "rtk"
   let warning: string | undefined
 
   try {
-    const result = await exec(resolver, ["rtk"], 1_000)
+    const result = await exec(resolver, [platform === "win32" ? "$PATH:rtk" : "rtk"], 1_000, options)
     const path = firstLine(result.stdout)
     if (result.exitCode === 0 && path) command = path
     else warning = `rtk path lookup failed: ${(result.stderr || result.stdout || `exit ${result.exitCode}`).trim()}`
@@ -60,8 +65,10 @@ export async function resolveRuntime(exec: Exec, platform = process.platform): P
     warning = `rtk path lookup failed: ${error instanceof Error ? error.message : String(error)}`
   }
 
+  if (platform === "win32" && warning) return { warning: `rtk unavailable: ${warning}` }
+
   try {
-    const result = await exec(command, ["--version"], 1_000)
+    const result = await exec(command, ["--version"], 1_000, options)
     if (result.exitCode === 0) {
       const runtime: Runtime = { command }
       if (warning) runtime.warning = warning
@@ -73,13 +80,13 @@ export async function resolveRuntime(exec: Exec, platform = process.platform): P
   }
 }
 
-export async function resolveRewrite(exec: Exec, command: string, executable: string): Promise<Rewrite> {
+export async function resolveRewrite(exec: Exec, command: string, executable: string, options?: ExecOptions): Promise<Rewrite> {
   if (!command.trim() || /^\s*rtk(?:\s|$)/.test(command)) {
     return { changed: false, original: command, rewritten: command, exitCode: 1 }
   }
 
   try {
-    const result = await exec(executable, ["rewrite", command], 3_000)
+    const result = await exec(executable, ["rewrite", command], 3_000, options)
     if (result.exitCode === 1) {
       return { changed: false, original: command, rewritten: command, exitCode: 1 }
     }
@@ -89,7 +96,7 @@ export async function resolveRewrite(exec: Exec, command: string, executable: st
         original: command,
         rewritten: command,
         exitCode: 2,
-        warning: result.stderr.trim() || "rtk denied rewrite",
+        warning: `rtk denied rewrite${result.stderr.trim() ? `: ${result.stderr.trim()}` : ""}`,
       }
     }
     if (result.exitCode !== 0 && result.exitCode !== 3) {
