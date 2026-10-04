@@ -11,6 +11,8 @@
   "scripts": {
     "build": "tsc",
     "test": "npm run test:build && node --test .test/index.test.js",
+    "test:rtk": "npm run test:build && node --test .test/rtk.test.js",
+    "test:plugin": "npm run build && node --test test/plugin.test.mjs",
     "test:build": "tsc -p tsconfig.test.json",
     "prepublishOnly": "npm run build"
   },
@@ -36,10 +38,16 @@
     "access": "public"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": "*"
+    "@opencode-ai/plugin": "*",
+    "@opencode/plugin": "^2.0.22"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": { "optional": true },
+    "@opencode/plugin": { "optional": true }
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "*",
+    "@opencode-ai/plugin": "1.18.2",
+    "@opencode/plugin": "2.0.22",
     "@types/node": "^26.1.1",
     "typescript": "^5.0.0"
   }

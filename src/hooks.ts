@@ -1,5 +1,6 @@
 import type { Hooks } from "@opencode-ai/plugin"
-import { resolveRewrite, resolveRuntime, type Exec } from "./rewrite.js"
+import type { ShellCreateBefore } from "@opencode/plugin/promise/shell"
+import { resolveRewrite, resolveRuntime, type Exec, type ExecOptions } from "./rewrite.js"
 
 export type Notice = (message: string, variant: "info" | "warning") => Promise<void>
 
@@ -19,11 +20,10 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
 }
 
-export function createHooks(exec: Exec, notify: Notice = async () => {}): Hooks {
-  const calls = new Map<string, Call>()
+function createRewriter(exec: Exec, notify: Notice = async () => {}) {
   const warned = new Set<string>()
-  let runtime: { command?: string; expires: number } = { expires: 0 }
-  let probe: Promise<string | undefined> | undefined
+  let runtime: { scope?: string; command?: string; expires: number } = { expires: 0 }
+  let probe: { scope: string; result: Promise<string | undefined> } | undefined
 
   const warn = async (message: string) => {
     if (warned.has(message)) return
@@ -32,30 +32,49 @@ export function createHooks(exec: Exec, notify: Notice = async () => {}): Hooks 
     await notify(message, "warning")
   }
 
-  const executable = async () => {
-    if (Date.now() < runtime.expires) return runtime.command
-    if (probe) return probe
-    probe = resolveRuntime(exec).then(async (result) => {
-      runtime = { command: result.command, expires: Date.now() + RUNTIME_TTL }
-      if (result.warning) await warn(result.warning)
-      return result.command
-    }).finally(() => {
-      probe = undefined
-    })
-    return probe
+  return async (command: string, options?: ExecOptions) => {
+    const scope = JSON.stringify([options?.cwd, options?.env])
+    let rtk = runtime.command
+    if (runtime.scope !== scope || Date.now() >= runtime.expires) {
+      if (probe?.scope !== scope) {
+        const pending = resolveRuntime(exec, process.platform, options).then(async (result) => {
+          runtime = { scope, command: result.command, expires: Date.now() + RUNTIME_TTL }
+          if (result.warning) await warn(result.warning)
+          return result.command
+        }).finally(() => {
+          if (probe?.result === pending) probe = undefined
+        })
+        probe = { scope, result: pending }
+      }
+      rtk = await probe.result
+    }
+    if (!rtk) return
+    const result = await resolveRewrite(exec, command, rtk, options)
+    if (result.exitCode === 2) return result
+    if (result.warning) await warn(result.warning)
+    return result
   }
+}
 
+export function createShellHook(exec: Exec) {
+  const rewrite = createRewriter(exec)
+  return async (event: ShellCreateBefore) => {
+    const result = await rewrite(event.command, { cwd: event.cwd, env: event.env })
+    if (result?.changed) event.command = result.rewritten
+  }
+}
+
+export function createHooks(exec: Exec, notify: Notice = async () => {}): Hooks {
+  const calls = new Map<string, Call>()
+  const rewrite = createRewriter(exec, notify)
   return {
     "tool.execute.before": async (input, output) => {
       if (input.tool !== "bash" || !record(output.args)) return
       const command = output.args.command
       if (typeof command !== "string") return
 
-      const rtk = await executable()
-      if (!rtk) return
-      const result = await resolveRewrite(exec, command, rtk)
-      if (result.warning) await warn(result.warning)
-      if (!result.changed) return
+      const result = await rewrite(command)
+      if (!result?.changed) return
 
       if (calls.size >= MAX_CALLS) calls.delete(calls.keys().next().value!)
       calls.set(key(input.sessionID, input.callID), {
