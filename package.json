@@ -1,6 +1,6 @@
 {
   "name": "opencode-rtk-optimizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenCode plugin for RTK, reduces LLM token consumption by 60-90% on dev commands",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
